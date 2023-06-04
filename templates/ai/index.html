@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Chat Page</title>
+	<style type="text/css">
+		body {
+			background-color: #F0F0F0;
+			font-family: Arial, sans-serif;
+		}
+		.container {
+			margin: auto;
+			max-width: 100vw;
+			padding: 20px;
+		}
+		.chat-box {
+			border: 1px solid #CCCCCC;
+			border-radius: 5px;
+			height: 76vh;
+			overflow-y: scroll;
+			padding: 10px;
+			margin-bottom: 20px;
+			background-color: #FFFFFF;
+		}
+		.chat-message {
+			margin-bottom: 10px;
+			padding: 10px;
+			border-radius: 5px;
+			background-color: #F0F0F0;
+		}
+		.chat-message.user {
+			background-color: #C8E6C9;
+		}
+		.chat-message.bot {
+			background-color: #BBDEFB;
+		}
+		.chat-message.markdown {
+			padding: 0;
+			background-color: transparent;
+		}
+		.chat-input {
+			margin-top: 10px;
+		}
+		.chat-input input[type=text] {
+			width: 100%;
+			border: 1px solid #CCCCCC;
+			border-radius: 5px;
+			padding: 10px;
+			font-size: 16px;
+			box-sizing: border-box;
+		}
+		.theme-selector {
+			display: inline-block;
+			margin-right: 10px;
+			padding: 10px;
+			border: 1px solid #CCCCCC;
+			border-radius: 5px;
+			cursor: pointer;
+			background-color: #FFFFFF;
+		}
+		.theme-selector.active {
+			background-color: #E0E0E0;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="theme-selector active" data-theme="general">General</div>
+		<div class="chat-box" data-theme="general">
+			<div class="chat-message bot">Welcome to the General Chat!</div>
+		</div>
+		<div class="chat-input">
+			<input type="text" placeholder="Type your message here...">
+		</div>
+	</div>
+
+	<script src="https://unpkg.com/showdown@2.1.0/dist/showdown.min.js"></script>
+	
+	<script>
+    var chatId = createGuid();
+    function createGuid() {
+      // Function for generating a unique ID
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+	var converter = new showdown.Converter();
+
+	// theme selector
+	const themeSelectors = document.querySelectorAll('.theme-selector');
+	const chatBoxes = document.querySelectorAll('.chat-box');
+	themeSelectors.forEach(selector => {
+		selector.addEventListener('click', () => {
+			const theme = selector.dataset.theme;
+			themeSelectors.forEach(s => s.classList.remove('active'));
+			selector.classList.add('active');
+			chatBoxes.forEach(box => {
+				box.dataset.theme === theme ? box.style.display = 'block' : box.style.display = 'none';
+			});
+		});
+	});
+
+	// send message
+	const chatInput = document.querySelector('.chat-input input[type=text]');
+	var isComposing = false;
+	document.addEventListener('compositionstart', function() {
+		isComposing = true;
+	});
+	document.addEventListener('compositionend', function() {
+		isComposing = false;
+	});
+	chatInput.addEventListener('keyup', (event) => {
+		if (event.keyCode === 13 && !isComposing) {
+			const message = chatInput.value.trim();
+			if (message == '') {
+				return
+			}
+			const activeTheme = document.querySelector('.theme-selector.active').dataset.theme;
+			const chatBox = document.querySelector(`.chat-box[data-theme="${activeTheme}"]`);
+			const chatMessage = document.createElement('div');
+			chatMessage.classList.add('chat-message', 'user');
+			chatMessage.innerText = message;
+			chatBox.appendChild(chatMessage);
+			chatBox.scrollTop = chatBox.scrollHeight;
+			chatInput.value = '';
+			chatInput.disabled = true;
+
+			// send message to API and add response to chat box\
+			fetch(`/gpt/continuous`, {
+				method: 'POST',
+				headers: {
+				'Content-Type': 'application/json',
+				"chat-id": chatId
+				},
+				body: JSON.stringify({
+				Prompt: message
+				})
+			})
+			.then(response => response.json())
+			.then(data => {
+				chatInput.disabled = false;
+				const activeTheme = document.querySelector('.theme-selector.active').dataset.theme;
+				const chatBox = document.querySelector(`.chat-box[data-theme="${activeTheme}"]`);
+				const botMessage = document.createElement('div');
+				botMessage.classList.add('chat-message', 'bot');
+				if (data.message) {
+					// botMessage.innerHTML = marked(data.message);
+					botMessage.innerHTML = converter.makeHtml(data.data);
+					// botMessage.innerHTML = data.data;
+				} else {
+					botMessage.innerText = 'Sorry, an error occurred while processing your request.';
+				}
+				chatBox.appendChild(botMessage);
+				chatBox.scrollTop = chatBox.scrollHeight;
+			})
+			.catch(error => {
+				chatInput.disabled = false;
+				const activeTheme = document.querySelector('.theme-selector.active').dataset.theme;
+				const chatBox = document.querySelector(`.chat-box[data-theme="${activeTheme}"]`);
+				console.error(error);
+				const botMessage = document.createElement('div');
+				botMessage.classList.add('chat-message', 'bot');
+				botMessage.innerText = 'Sorry, an error occurred while processing your request.';
+				chatBox.appendChild(botMessage);
+				chatBox.scrollTop = chatBox.scrollHeight;
+			});
+		}
+	});
+
+	function addMessage(type, message) {
+		const activeTheme = document.querySelector('.theme-selector.active').dataset.theme;
+		const chatBox = document.querySelector(`.chat-box[data-theme="${activeTheme}"]`);
+		const chatMessage = document.createElement('div');
+		if (type == "user") {
+			chatMessage.classList.add('chat-message', 'user');
+		} else {
+			botMessage.classList.add('chat-message', 'bot');
+		}
+		chatMessage.innerText = message;
+		chatBox.appendChild(chatMessage);
+		chatBox.scrollTop = chatBox.scrollHeight;
+	}
+
+	</script>
+</body>
+</html>
